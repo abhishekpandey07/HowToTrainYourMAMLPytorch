@@ -29,16 +29,17 @@ def maybe_unzip_dataset(args):
         total_files = 0
         for subdir, dir, files in os.walk(dataset_path):
             for file in files:
-                if file.lower().endswith(".jpeg") or file.lower().endswith(".jpg") or file.lower().endswith(
-                        ".png") or file.lower().endswith(".pkl"):
+                if file.lower().endswith(".txt"):
                     total_files += 1
         print("count stuff________________________________________", total_files)
         if (total_files == 1623 * 20 and datasets[dataset_idx] == 'omniglot_dataset') or (
                 total_files == 100 * 600 and 'mini_imagenet' in datasets[dataset_idx]) or (
-                total_files == 3 and 'mini_imagenet_pkl' in datasets[dataset_idx]):
+                total_files == 3 and 'mini_imagenet_pkl' in datasets[dataset_idx]) or (
+                    datasets[dataset_idx] == 'pan18' and total_files == (105+7*20)
+                ):
             print("file count is correct")
             done = True
-
+        
         if not done:
             shutil.rmtree(dataset_path, ignore_errors=True)
             maybe_unzip_dataset(args)

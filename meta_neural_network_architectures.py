@@ -419,7 +419,7 @@ class MetaConvNormLayerReLU(nn.Module):
 
         out = x
 
-        self.conv = MetaConv2dLayer(in_channels=out.shape[1], out_channels=self.num_filters,
+        self.conv = MetaConv1dLayer(in_channels=out.shape[1], out_channels=self.num_filters,
                                     kernel_size=self.kernel_size,
                                     stride=self.stride, padding=self.padding, use_bias=self.use_bias)
 
@@ -659,7 +659,7 @@ class MetaNormLayerConvReLU(nn.Module):
                 self.norm_layer = MetaLayerNormLayer(input_feature_shape=out.shape[1:])
 
             out = self.norm_layer.forward(out, num_step=0)
-        self.conv = MetaConv2dLayer(in_channels=out.shape[1], out_channels=self.num_filters,
+        self.conv = MetaConv1dLayer(in_channels=out.shape[1], out_channels=self.num_filters,
                                     kernel_size=self.kernel_size,
                                     stride=self.stride, padding=self.padding, use_bias=self.use_bias)
 
@@ -858,11 +858,11 @@ class VGGReLUNormNetwork(nn.Module):
             self.layer_dict['conv{}'.format(i)].restore_backup_stats()
 
 class VGGReLUNormNetwork_Conv1D(nn.Module):
-    def __init__(self, line_shape, num_output_classes, args, device, meta_classifier=True):
+    def __init__(self, data_shape, num_output_classes, args, device, meta_classifier=True):
         """
         Builds a multilayer convolutional network. It also provides functionality for passing external parameters to be
         used at inference time. Enables inner loop optimization readily.
-        :param line_shape: The input lines(sentences one-hot encoded at character level) batch shape.
+        :param data_shape: The input lines(sentences one-hot encoded at character level) batch shape.
         :param num_output_classes: The number of output classes of the network.
         :param args: A named tuple containing the system's hyperparameters.
         :param device: The device to run this on.
@@ -870,13 +870,13 @@ class VGGReLUNormNetwork_Conv1D(nn.Module):
         be enabled.
         """
         super(VGGReLUNormNetwork_Conv1D, self).__init__()
-        b, c, self.h, self.w = line_shape
+        b, c, self.w = data_shape
         self.device = device
         self.total_layers = 0
         self.args = args
         self.upscale_shapes = []
         self.cnn_filters = args.cnn_num_filters
-        self.input_shape = list(line_shape)
+        self.input_shape = list(data_shape)
         self.num_stages = args.num_stages
         self.num_output_classes = num_output_classes
 
@@ -917,11 +917,11 @@ class VGGReLUNormNetwork_Conv1D(nn.Module):
             out = self.layer_dict['conv{}'.format(i)](out, training=True, num_step=0)
 
             if self.args.max_pooling:
-                out = F.max_pool2d(input=out, kernel_size=(2, 2), stride=2, padding=0)
+                out = F.max_pool1d(input=out, kernel_size=2 , stride=2, padding=0)
 
 
         if not self.args.max_pooling:
-            out = F.avg_pool2d(out, out.shape[2])
+            out = F.avg_pool1d(out, out.shape[2])
 
         self.encoder_features_shape = list(out.shape)
         out = out.view(out.shape[0], -1)

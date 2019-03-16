@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from meta_neural_network_architectures import VGGReLUNormNetwork
+from meta_neural_network_architectures import VGGReLUNormNetwork, VGGReLUNormNetwork_Conv1D
 
 
 def set_torch_seed(seed):
@@ -39,7 +39,7 @@ class MAMLFewShotClassifier(nn.Module):
         self.current_epoch = 0
 
         self.rng = set_torch_seed(seed=args.seed)
-        self.classifier = VGGReLUNormNetwork(data_shape=self.data_shape, num_output_classes=self.args.
+        self.classifier = VGGReLUNormNetwork_Conv1D(data_shape=self.data_shape, num_output_classes=self.args.
                                              num_classes_per_set,
                                              args=args, device=device, meta_classifier=True).to(device=self.device)
         self.task_learning_rate = args.task_learning_rate
