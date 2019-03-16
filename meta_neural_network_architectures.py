@@ -544,11 +544,11 @@ class MetaNormLayerConvReLU(nn.Module):
 
 
 class VGGReLUNormNetwork(nn.Module):
-    def __init__(self, im_shape, num_output_classes, args, device, meta_classifier=True):
+    def __init__(self, data_shape, num_output_classes, args, device, meta_classifier=True):
         """
         Builds a multilayer convolutional network. It also provides functionality for passing external parameters to be
         used at inference time. Enables inner loop optimization readily.
-        :param im_shape: The input image batch shape.
+        :param data_shape: The input text batch shape.
         :param num_output_classes: The number of output classes of the network.
         :param args: A named tuple containing the system's hyperparameters.
         :param device: The device to run this on.
@@ -556,13 +556,13 @@ class VGGReLUNormNetwork(nn.Module):
         be enabled.
         """
         super(VGGReLUNormNetwork, self).__init__()
-        b, c, self.h, self.w = im_shape
+        b, c, self.w = data_shape
         self.device = device
         self.total_layers = 0
         self.args = args
         self.upscale_shapes = []
         self.cnn_filters = args.cnn_num_filters
-        self.input_shape = list(im_shape)
+        self.input_shape = list(data_shape)
         self.num_stages = args.num_stages
         self.num_output_classes = num_output_classes
 

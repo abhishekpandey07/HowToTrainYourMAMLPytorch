@@ -23,10 +23,10 @@ def set_torch_seed(seed):
 
 
 class MAMLFewShotClassifier(nn.Module):
-    def __init__(self, im_shape, device, args):
+    def __init__(self, data_shape, device, args):
         """
         Initializes a MAML few shot learning system
-        :param im_shape: The images input size, in batch, c, h, w shape
+        :param data_shape: The text input size, in batch, c, h, w shape
         :param device: The device to use to use the model on.
         :param args: A namedtuple of arguments specifying various hyperparameters.
         """
@@ -35,11 +35,11 @@ class MAMLFewShotClassifier(nn.Module):
         self.device = device
         self.batch_size = args.batch_size
         self.use_cuda = args.use_cuda
-        self.im_shape = im_shape
+        self.data_shape = data_shape
         self.current_epoch = 0
 
         self.rng = set_torch_seed(seed=args.seed)
-        self.classifier = VGGReLUNormNetwork(im_shape=self.im_shape, num_output_classes=self.args.
+        self.classifier = VGGReLUNormNetwork(data_shape=self.data_shape, num_output_classes=self.args.
                                              num_classes_per_set,
                                              args=args, device=device, meta_classifier=True).to(device=self.device)
         self.task_learning_rate = args.task_learning_rate

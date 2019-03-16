@@ -7,9 +7,8 @@ def get_args():
     parser = argparse.ArgumentParser(description='Welcome to the MAML++ training and inference system')
 
     parser.add_argument('--batch_size', nargs="?", type=int, default=32, help='Batch_size for experiment')
-    parser.add_argument('--image_height', nargs="?", type=int, default=28)
-    parser.add_argument('--image_width', nargs="?", type=int, default=28)
-    parser.add_argument('--image_channels', nargs="?", type=int, default=1)
+    parser.add_argument('--input_width', nargs="?", type=int, default=28)
+    parser.add_argument('--input_channels', nargs="?", type=int, default=1)
     parser.add_argument('--reset_stored_filepaths', type=str, default="False")
     parser.add_argument('--reverse_channels', type=str, default="False")
     parser.add_argument('--num_of_gpus', type=int, default=1)
