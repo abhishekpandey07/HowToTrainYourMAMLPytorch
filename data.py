@@ -683,14 +683,14 @@ class NLPDataProvider(Dataset):
         label_name_to_idx = {label: idx for idx, label in enumerate(labels)}
         data_text_path_dict = {idx: [] for idx in list(idx_to_label_name.keys())}
         with tqdm.tqdm(total=len(data_file_text_path_list_raw)) as pbar_error:
-            # with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
                 # Process the list of files, but split the work across the process pool to use all CPUs!
                 # for text_file in executor.map(self.test_file_path, (data_file_text_path_list_raw)):
-            for text_file in list(map(self.test_file_path,data_file_text_path_list_raw)):
-                pbar_error.update(1)
-                if text_file is not None:
-                    label = self.get_label_from_path(text_file)
-                    data_text_path_dict[label_name_to_idx[label]].append(text_file)
+                for text_file in executor.map(self.test_file_path,data_file_text_path_list_raw):
+                    pbar_error.update(1)
+                    if text_file is not None:
+                        label = self.get_label_from_path(text_file)
+                        data_text_path_dict[label_name_to_idx[label]].append(text_file)
 
         # load target sets
         target_set_map_dict = None
@@ -788,11 +788,13 @@ class NLPDataProvider(Dataset):
             #encoder = encoders[mehthod]
             for i,text_file in enumerate(x): 
                 x[i] = one_hot_encoder.transform(text_file).toarray()
-                x[i] = x[i].reshape(-1,self.input_width,self.input_channels)
+                #x[i] = x[i].reshape(-1,self.input_width,self.input_channels)
                 # swap features with channels to get a final shape of (#batch,#channels,#features)
-                x[i] = np.swapaxes(x[i],1,2) 
+                #x[i] = np.swapaxes(x[i],1,2) 
             
             x = np.vstack(x)
+            x = x.reshape(-1,self.input_width, self.input_channels)
+            x = np.swapaxes(x,1,2)
             return x
 
         except Exception as e:
@@ -815,6 +817,27 @@ class NLPDataProvider(Dataset):
 
         return text
 
+    def load_batch(self, batch_text_path):
+        """
+        Load a batch of images, given a list of filepaths
+        :param batch_image_paths: A list of filepaths
+        :return: A numpy array of images of shape batch, height, width, channels
+        """
+        text_batch = []
+
+        if self.data_loaded_in_memory:
+            for text_path in batch_text_path:
+                text_batch.append(text_path)
+            text_batch = np.array(text_batch, dtype=np.float32)
+            #print(text_batch.shape)
+        else:
+            text_batch = [self.load_text(file_path=text_path)
+                           for text_path in batch_text_path]
+            text_batch = np.array(text_batch, dtype=np.float32)
+            text_batch = self.preprocess_data(text_batch)
+
+        return text_batch
+
     def load_parallel_batch(self, inputs):
         """
         Load a batch of images, given a list of filepaths
@@ -829,7 +852,7 @@ class NLPDataProvider(Dataset):
         if self.data_loaded_in_memory:
             for file_path in batch_file_paths:
                 text_batch.append(np.copy(file_path))
-            text_batch = np.array(text_batch, dtype=np.int8)
+            text_batch = np.array(text_batch, dtype=np.float32)
 
         else:
             #with tqdm.tqdm(total=1) as load_pbar:
@@ -885,11 +908,11 @@ class NLPDataProvider(Dataset):
                 x_loaded[set_key] = {key: np.zeros(len(value), ) for key, value in set_value.items()}
                 # for class_key, class_value in set_value.items():
                 with tqdm.tqdm(total=len(set_value)) as pbar_memory_load:
-                    # with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+                    with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
                         # Process the list of files, but split the work across the process pool to use all CPUs!
-                    for (class_label, class_images_loaded) in list(map(self.load_parallel_batch, (set_value.items()))):
-                        x_loaded[set_key][class_label] = class_images_loaded
-                        pbar_memory_load.update(1)
+                        for (class_label, class_images_loaded) in executor.map(self.load_parallel_batch, (set_value.items())):
+                            x_loaded[set_key][class_label] = class_images_loaded
+                            pbar_memory_load.update(1)
 
             dataset_splits = x_loaded
             self.data_loaded_in_memory = True
@@ -918,42 +941,50 @@ class NLPDataProvider(Dataset):
         selected_classes = rng.choice(list(self.dataset_size_dict[dataset_name].keys()),
                                       size=self.num_classes_per_set, replace=False)
         rng.shuffle(selected_classes)
-        k_list = rng.randint(0, 4, size=self.num_classes_per_set)
-        k_dict = {selected_class: k_item for (selected_class, k_item) in zip(selected_classes, k_list)}
+        
         episode_labels = [i for i in range(self.num_classes_per_set)]
         class_to_episode_label = {selected_class: episode_label for (selected_class, episode_label) in
                                   zip(selected_classes, episode_labels)}
 
-        x_images = []
+        x_texts = []
         y_labels = []
 
         for class_entry in selected_classes:
             # we want to ensure that the target set comes from the unknown folder.
-            choose_samples_list = rng.choice(self.dataset_size_dict[dataset_name][class_entry],
+            choose_support_list = rng.choice(self.dataset_size_dict[dataset_name][class_entry],
                                              size=self.num_samples_per_class, replace=False)
-            choose_samples_list = rng.choice(self.dataset_size_dict['target'][class_entry],
+            choose_target_list = rng.choice(self.dataset_size_dict['target'][class_entry],
                                              size=self.num_target_samples, replace=False)
+            
             class_text_samples = []
             class_labels = []
-            for sample in choose_samples_list:
+            for sample in choose_support_list:
                 choose_samples = self.datasets[dataset_name][class_entry][sample]
                 x_class_data = self.load_batch([choose_samples])[0]
-                k = k_dict[class_entry]
-                x_class_data = augment_image(image=x_class_data, k=k,
-                                             channels=self.image_channel, augment_bool=augment_images,
-                                             dataset_name=self.dataset_name, args=self.args)
-                class_image_samples.append(x_class_data)
+               
+                class_text_samples.append(torch.tensor(x_class_data))
                 class_labels.append(int(class_to_episode_label[class_entry]))
-            class_image_samples = torch.stack(class_image_samples)
-            x_images.append(class_image_samples)
+
+            for sample in choose_target_list:
+                choose_samples = self.datasets["target"][class_entry][sample]
+                x_class_data = self.load_batch([choose_samples])[0]
+               
+                class_text_samples.append(torch.tensor(x_class_data))
+                class_labels.append(int(class_to_episode_label[class_entry]))
+
+            class_text_samples = torch.stack(class_text_samples)
+            x_texts.append(class_text_samples)
             y_labels.append(class_labels)
 
-        x_images = torch.stack(x_images)
+
+        
+
+        x_texts = torch.stack(x_texts)
         y_labels = np.array(y_labels, dtype=np.float32)
 
-        support_set_images = x_images[:, :self.num_samples_per_class]
+        support_set_images = x_texts[:, :self.num_samples_per_class]
         support_set_labels = y_labels[:, :self.num_samples_per_class]
-        target_set_images = x_images[:, self.num_samples_per_class:]
+        target_set_images = x_texts[:, self.num_samples_per_class:]
         target_set_labels = y_labels[:, self.num_samples_per_class:]
 
         return support_set_images, target_set_images, support_set_labels, target_set_labels, seed
@@ -1013,7 +1044,7 @@ class MetaLearningSystemDataLoader(object):
         :return:
         """
         return DataLoader(self.dataset, batch_size=(self.num_of_gpus * self.batch_size * self.samples_per_iter),
-                          shuffle=False, num_workers=self.num_workers, drop_last=True)
+                          shuffle=False, drop_last=True,num_workers=self.num_workers)
 
     def continue_from_iter(self, current_iter):
         """

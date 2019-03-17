@@ -963,10 +963,10 @@ class VGGReLUNormNetwork_Conv1D(nn.Module):
                                                       backup_running_statistics=backup_running_statistics,
                                                       num_step=num_step)
             if self.args.max_pooling:
-                out = F.max_pool2d(input=out, kernel_size=(2, 2), stride=2, padding=0)
+                out = F.max_pool1d(input=out, kernel_size=2, stride=2, padding=0)
 
         if not self.args.max_pooling:
-            out = F.avg_pool2d(out, out.shape[2])
+            out = F.avg_pool1d(out, out.shape[2])
 
         out = out.view(out.size(0), -1)
         out = self.layer_dict['linear'](out, param_dict['linear'])

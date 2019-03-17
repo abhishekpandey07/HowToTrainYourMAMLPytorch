@@ -184,11 +184,11 @@ class MAMLFewShotClassifier(nn.Module):
             per_step_loss_importance_vectors = self.get_per_step_loss_importance_vector()
             names_weights_copy = self.get_inner_loop_parameter_dict(self.classifier.named_parameters())
 
-            n, s, c, h, w = x_target_set_task.shape
+            n, s, c, w = x_target_set_task.shape
 
-            x_support_set_task = x_support_set_task.view(-1, c, h, w)
+            x_support_set_task = x_support_set_task.view(-1, c, w)
             y_support_set_task = y_support_set_task.view(-1)
-            x_target_set_task = x_target_set_task.view(-1, c, h, w)
+            x_target_set_task = x_target_set_task.view(-1, c, w)
             y_target_set_task = y_target_set_task.view(-1)
 
             for num_step in range(num_steps):
