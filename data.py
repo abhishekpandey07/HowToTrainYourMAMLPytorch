@@ -10,9 +10,17 @@ import torch
 from torchvision import transforms
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
-
+from collections import defaultdict
 from utils.parser_utils import get_args
+import string
 
+valid = np.array(list(string.ascii_letters) + list("""@,.!?’' \"""")).reshape(-1,1)
+from sklearn.preprocessing import OneHotEncoder
+one_hot_encoder = OneHotEncoder()
+one_hot_encoder.fit(valid)
+encoders = {
+    "one_hot_encoder": one_hot_encoder
+}
 
 class rotate_image(object):
 
@@ -615,7 +623,9 @@ class NLPDataProvider(Dataset):
         self.dataset_size_dict = {
             "train": {key: len(self.datasets['train'][key]) for key in list(self.datasets['train'].keys())},
             "val": {key: len(self.datasets['val'][key]) for key in list(self.datasets['val'].keys())},
-            'test': {key: len(self.datasets['test'][key]) for key in list(self.datasets['test'].keys())}}
+            'test': {key: len(self.datasets['test'][key]) for key in list(self.datasets['test'].keys())},
+            "target": {key: len(self.datasets['target'][key]) for key in list(self.datasets['target'].keys())}}
+
         self.label_set = self.get_label_set()
         self.data_length = {name: np.sum([len(self.datasets[name][key])
                                           for key in self.datasets[name]]) for name in self.datasets.keys()}
@@ -656,13 +666,17 @@ class NLPDataProvider(Dataset):
         print("Get text files from", self.data_path)
         data_file_text_path_list_raw = []
         labels = set()
+        
         for subdir, dir, files in os.walk(self.data_path):
-            for file in files:
-                if ".txt" in file.lower():
-                    filepath = os.path.abspath(os.path.join(subdir, file))
-                    label = self.get_label_from_path(filepath)
-                    data_file_text_path_list_raw.append(filepath)
-                    labels.add(label)
+            if('unknown' not in subdir):
+                for file in files:
+                    if file.lower().endswith('processed'):
+                        filepath = os.path.abspath(os.path.join(subdir, file))
+                        label = self.get_label_from_path(filepath)
+                        data_file_text_path_list_raw.append(filepath)
+                        labels.add(label)
+            else:
+                unknown_dir_name = subdir
 
         labels = sorted(labels)
         idx_to_label_name = {idx: label for idx, label in enumerate(labels)}
@@ -678,7 +692,19 @@ class NLPDataProvider(Dataset):
                     label = self.get_label_from_path(text_file)
                     data_text_path_dict[label_name_to_idx[label]].append(text_file)
 
-        return data_text_path_dict, idx_to_label_name, label_name_to_idx
+        # load target sets
+        target_set_map_dict = None
+        if(unknown_dir_name):
+            ground_truth_data = self.load_from_json(os.path.join(self.data_path,'ground-truth.json'))['ground_truth']
+            target_set_map_dict = defaultdict(list)
+            for x in ground_truth_data:
+                idx = label_name_to_idx[x['true-author']]
+                filename = ".".join([x['unknown-text'],"processed"])
+                filename = os.path.join(unknown_dir_name,filename)
+                filename = os.path.abspath(filename)
+                target_set_map_dict[idx].append(filename)
+
+        return data_text_path_dict, idx_to_label_name, label_name_to_idx, target_set_map_dict
 
     def load_datapaths(self):
         """
@@ -694,7 +720,7 @@ class NLPDataProvider(Dataset):
         data_path_file = "{}/{}.json".format(dataset_dir, self.dataset_name)
         self.index_to_label_name_dict_file = "{}/map_to_label_name_{}.json".format(dataset_dir, self.dataset_name)
         self.label_name_to_map_dict_file = "{}/label_name_to_map_{}.json".format(dataset_dir, self.dataset_name)
-
+        self.unknown_map_file =  "{}/label_name_to_map_{}.json".format(dataset_dir,self.dataset_name)
         if not os.path.exists(data_path_file):
             self.reset_stored_filepaths = True
 
@@ -707,13 +733,19 @@ class NLPDataProvider(Dataset):
             data_image_paths = self.load_from_json(filename=data_path_file)
             label_to_index = self.load_from_json(filename=self.label_name_to_map_dict_file)
             index_to_label_name_dict_file = self.load_from_json(filename=self.index_to_label_name_dict_file)
-            return data_image_paths, index_to_label_name_dict_file, label_to_index
+            try:
+                target_set_map_dict = self.load_from_json(filename=self.unknown_map_file)
+            except:
+                target_set_map_dict = None
+            return data_image_paths, index_to_label_name_dict_file, label_to_index, target_set_map_dict
         except:
             print("Mapped data paths can't be found, remapping paths..")
-            data_image_paths, code_to_label_name, label_name_to_code = self.get_data_paths()
+            data_image_paths, code_to_label_name, label_name_to_code, target_set_map_dict = self.get_data_paths()
             self.save_to_json(dict_to_store=data_image_paths, filename=data_path_file)
             self.save_to_json(dict_to_store=code_to_label_name, filename=self.index_to_label_name_dict_file)
             self.save_to_json(dict_to_store=label_name_to_code, filename=self.label_name_to_map_dict_file)
+            if(target_set_map_dict is not None):
+                self.save_to_json(dict_to_store=target_set_map_dict, filename=self.unknown_map_file)
             return self.load_datapaths()
 
     def get_label_set(self):
@@ -743,7 +775,7 @@ class NLPDataProvider(Dataset):
         return index_to_label_name[index]
     
 
-    def preprocess_data(self, x,method='one_hot'):
+    def preprocess_data(self, x,method='one_hot_encoder'):
         """
         Preprocesses data such that their shapes match the specified structures
         :param x: A data batch to preprocess
@@ -752,12 +784,19 @@ class NLPDataProvider(Dataset):
 
         # Perform One Hot encoding
         """
-        return x
-        if(method == 'one_hot_encode'):
-            #(on_hot_value,500)
-            depth = 28
-            target_shape = (-1,depth,500)
-            x = x.reshape(x_shape)
+        try: 
+            #encoder = encoders[mehthod]
+            for i,text_file in enumerate(x): 
+                x[i] = one_hot_encoder.transform(text_file).toarray()
+                x[i] = x[i].reshape(-1,self.input_width,self.input_channels)
+                # swap features with channels to get a final shape of (#batch,#channels,#features)
+                x[i] = np.swapaxes(x[i],1,2) 
+            
+            x = np.vstack(x)
+            return x
+
+        except Exception as e:
+            print(e.args)
             return x
 
     def load_text(self, file_path):
@@ -768,7 +807,8 @@ class NLPDataProvider(Dataset):
         """
         if not self.data_loaded_in_memory:
             text_file = open(file_path,'r')
-            text = text_file.readlines()
+            text = [list(x.replace('\n','')) for x in text_file.readlines() if(len(x) >= 500)]
+            text = np.array(text).reshape(-1,1)
             # should I convert this into a one hot encoded vector here itself ? NO!
         else:
             text = file_path
@@ -813,7 +853,7 @@ class NLPDataProvider(Dataset):
         """
         rng = np.random.RandomState(seed=self.seed['val'])
 
-        data_text_paths, index_to_label_name_dict_file, label_to_index = self.load_datapaths()
+        data_text_paths, index_to_label_name_dict_file, label_to_index, target_set_map_dict = self.load_datapaths()
         total_label_types = len(data_text_paths)
         num_classes_idx = np.arange(len(data_text_paths.keys()), dtype=np.int32)
         rng.shuffle(num_classes_idx)
@@ -833,12 +873,12 @@ class NLPDataProvider(Dataset):
         x_train, x_val, x_test = {class_key: data_text_paths[class_key] for class_key in x_train_classes}, \
                                     {class_key: data_text_paths[class_key] for class_key in x_val_classes}, \
                                     {class_key: data_text_paths[class_key] for class_key in x_test_classes},
-        dataset_splits = {"train": x_train, "val":x_val , "test": x_test}
+        dataset_splits = {"train": x_train, "val":x_val , "test": x_test,"target":target_set_map_dict}
 
         if self.args.load_into_memory is True:
 
             print("Loading data into RAM")
-            x_loaded = {"train": [], "val": [], "test": []}
+            x_loaded = {"train": [], "val": [], "test": [], "target":[]}
 
             for set_key, set_value in dataset_splits.items():
                 print("Currently loading into memory the {} set".format(set_key))
@@ -888,9 +928,12 @@ class NLPDataProvider(Dataset):
         y_labels = []
 
         for class_entry in selected_classes:
+            # we want to ensure that the target set comes from the unknown folder.
             choose_samples_list = rng.choice(self.dataset_size_dict[dataset_name][class_entry],
-                                             size=self.num_samples_per_class + self.num_target_samples, replace=False)
-            class_image_samples = []
+                                             size=self.num_samples_per_class, replace=False)
+            choose_samples_list = rng.choice(self.dataset_size_dict['target'][class_entry],
+                                             size=self.num_target_samples, replace=False)
+            class_text_samples = []
             class_labels = []
             for sample in choose_samples_list:
                 choose_samples = self.datasets[dataset_name][class_entry][sample]

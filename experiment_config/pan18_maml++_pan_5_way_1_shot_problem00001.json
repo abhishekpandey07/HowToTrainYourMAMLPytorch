@@ -1,7 +1,7 @@
 {
     "batch_size":16,
     "input_width":500,
-    "input_channels":60,
+    "input_channels":61,
     "gpu_to_use":0,
     "num_dataprovider_workers":4,
     "max_models_to_save":5,
@@ -10,7 +10,7 @@
     "reset_stored_paths":false,
     "experiment_name":"pan18_maml++_pan_5_way_1_shot_problem00001",
     "train_seed": 0, "val_seed": 0,
-    "train_val_test_split": [0.70918052988, 0.03080714725, 0.2606284658],
+    "train_val_test_split": [0.7, 0.3, 0],
     "indexes_of_folders_indicating_class": [-3, -2],
     "load_from_npz_files": false,
     "sets_are_pre_split": false,
