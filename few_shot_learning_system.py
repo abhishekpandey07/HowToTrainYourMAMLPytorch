@@ -345,7 +345,7 @@ class MAMLFewShotClassifier(nn.Module):
 
         return losses, per_task_target_preds
 
-    def run_validation_iter(self, data_batch):
+    def run_validation_iter(self, data_batch, test_iteration=False):
         """
         Runs an outer loop evaluation step on the meta-model's parameters.
         :param data_batch: input data batch containing the support set and target set input, output pairs
@@ -359,9 +359,10 @@ class MAMLFewShotClassifier(nn.Module):
         x_support_set, x_target_set, y_support_set, y_target_set = data_batch
 
         x_support_set = torch.Tensor(x_support_set).float().to(device=self.device)
-        x_target_set = torch.Tensor(x_target_set).float().to(device=self.device)
         y_support_set = torch.Tensor(y_support_set).long().to(device=self.device)
-        y_target_set = torch.Tensor(y_target_set).long().to(device=self.device)
+        if(test_iteration==False):
+            x_target_set = torch.Tensor(x_target_set).float().to(device=self.device)
+            y_target_set = torch.Tensor(y_target_set).long().to(device=self.device)
 
         data_batch = (x_support_set, x_target_set, y_support_set, y_target_set)
 
@@ -393,7 +394,7 @@ class MAMLFewShotClassifier(nn.Module):
         :return: A dictionary containing the experiment state and the saved model parameters.
         """
         filepath = os.path.join(model_save_dir, "{}_{}".format(model_name, model_idx))
-        state = torch.load(filepath)
+        state = torch.load(filepath,map_location='cpu')
         state_dict_loaded = state['network']
         self.load_state_dict(state_dict=state_dict_loaded)
         return state

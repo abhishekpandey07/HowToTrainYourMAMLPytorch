@@ -5,7 +5,7 @@
     "gpu_to_use":0,
     "num_dataprovider_workers":4,
     "max_models_to_save":5,
-    "dataset_name":"pan18",
+    "dataset_name":"pan18_1",
     "dataset_path":"pan18/problem00001",
     "reset_stored_paths":false,
     "experiment_name":"pan18_maml++_pan_5_way_1_shot_problem00001",

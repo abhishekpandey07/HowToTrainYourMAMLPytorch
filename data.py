@@ -12,6 +12,7 @@ from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 from collections import defaultdict
 from utils.parser_utils import get_args
+from utils.tensor_generator import TensorGenerator
 import string
 
 valid = np.array(list(string.ascii_letters) + list("""@,.!?’' \"""")).reshape(-1,1)
@@ -683,14 +684,13 @@ class NLPDataProvider(Dataset):
         label_name_to_idx = {label: idx for idx, label in enumerate(labels)}
         data_text_path_dict = {idx: [] for idx in list(idx_to_label_name.keys())}
         with tqdm.tqdm(total=len(data_file_text_path_list_raw)) as pbar_error:
-            with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+            # with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
                 # Process the list of files, but split the work across the process pool to use all CPUs!
-                # for text_file in executor.map(self.test_file_path, (data_file_text_path_list_raw)):
-                for text_file in executor.map(self.test_file_path,data_file_text_path_list_raw):
-                    pbar_error.update(1)
-                    if text_file is not None:
-                        label = self.get_label_from_path(text_file)
-                        data_text_path_dict[label_name_to_idx[label]].append(text_file)
+            for text_file in (map(self.test_file_path,data_file_text_path_list_raw)):
+                pbar_error.update(1)
+                if text_file is not None:
+                    label = self.get_label_from_path(text_file)
+                    data_text_path_dict[label_name_to_idx[label]].append(text_file)
 
         # load target sets
         target_set_map_dict = None
@@ -908,11 +908,11 @@ class NLPDataProvider(Dataset):
                 x_loaded[set_key] = {key: np.zeros(len(value), ) for key, value in set_value.items()}
                 # for class_key, class_value in set_value.items():
                 with tqdm.tqdm(total=len(set_value)) as pbar_memory_load:
-                    with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+                    # with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
                         # Process the list of files, but split the work across the process pool to use all CPUs!
-                        for (class_label, class_images_loaded) in executor.map(self.load_parallel_batch, (set_value.items())):
-                            x_loaded[set_key][class_label] = class_images_loaded
-                            pbar_memory_load.update(1)
+                    for (class_label, class_images_loaded) in (map(self.load_parallel_batch, (set_value.items()))):
+                        x_loaded[set_key][class_label] = class_images_loaded
+                        pbar_memory_load.update(1)
 
             dataset_splits = x_loaded
             self.data_loaded_in_memory = True
@@ -942,7 +942,15 @@ class NLPDataProvider(Dataset):
                                       size=self.num_classes_per_set, replace=False)
         rng.shuffle(selected_classes)
         
-        episode_labels = [i for i in range(self.num_classes_per_set)]
+        # inorder to have consistency across test_batches during test phase,
+        # we set the episode labels same as the original label of the classes.
+        # during the test time we have an assumption that total number of classes
+        # will be equal to the num_classes_per_set
+        
+        episode_labels = range(self.num_classes_per_set)
+        if(dataset_name == "test"):
+            episode_labels = selected_classes
+
         class_to_episode_label = {selected_class: episode_label for (selected_class, episode_label) in
                                   zip(selected_classes, episode_labels)}
 
@@ -950,12 +958,9 @@ class NLPDataProvider(Dataset):
         y_labels = []
 
         for class_entry in selected_classes:
-            # we want to ensure that the target set comes from the unknown folder.
             choose_support_list = rng.choice(self.dataset_size_dict[dataset_name][class_entry],
                                              size=self.num_samples_per_class, replace=False)
-            choose_target_list = rng.choice(self.dataset_size_dict['target'][class_entry],
-                                             size=self.num_target_samples, replace=False)
-            
+                        
             class_text_samples = []
             class_labels = []
             for sample in choose_support_list:
@@ -964,30 +969,55 @@ class NLPDataProvider(Dataset):
                
                 class_text_samples.append(torch.tensor(x_class_data))
                 class_labels.append(int(class_to_episode_label[class_entry]))
-
-            for sample in choose_target_list:
-                choose_samples = self.datasets["target"][class_entry][sample]
-                x_class_data = self.load_batch([choose_samples])[0]
-               
-                class_text_samples.append(torch.tensor(x_class_data))
-                class_labels.append(int(class_to_episode_label[class_entry]))
+            
+            if(dataset_name is not 'test'):
+                choose_target_list = rng.choice(self.dataset_size_dict['target'][class_entry],
+                                                size=self.num_target_samples, replace=False)
+                for sample in choose_target_list:
+                    choose_samples = self.datasets["target"][class_entry][sample]
+                    x_class_data = self.load_batch([choose_samples])[0]
+                
+                    class_text_samples.append(torch.tensor(x_class_data))
+                    class_labels.append(int(class_to_episode_label[class_entry]))
 
             class_text_samples = torch.stack(class_text_samples)
             x_texts.append(class_text_samples)
             y_labels.append(class_labels)
-
-
-        
 
         x_texts = torch.stack(x_texts)
         y_labels = np.array(y_labels, dtype=np.float32)
 
         support_set_images = x_texts[:, :self.num_samples_per_class]
         support_set_labels = y_labels[:, :self.num_samples_per_class]
-        target_set_images = x_texts[:, self.num_samples_per_class:]
-        target_set_labels = y_labels[:, self.num_samples_per_class:]
-
+        if(dataset_name is not 'test'):
+            target_set_images = x_texts[:, self.num_samples_per_class:]
+            target_set_labels = y_labels[:, self.num_samples_per_class:]
+        else:
+            # this branch is to evaluate pan dataset on a 5 class problem 
+            # which is also equal to the number of possible classes.
+            target_set_labels = -1
+            target_set_images = -1
+            # but this will still create 16 copies of the same dataset.
+            # rather create a custom function.
         return support_set_images, target_set_images, support_set_labels, target_set_labels, seed
+
+    def get_pan_full_target_set(self):
+        target_labels = []
+        target_texts = []
+        for a_class in self.datasets['target']:
+            class_samples = []
+            for sample in self.datasets['target'][a_class]:
+                target_labels.append(int(a_class))
+                class_data = self.load_batch([sample])[0]
+                class_samples.append(torch.tensor(class_data))
+            class_samples = torch.stack(class_samples)
+            target_texts.append(class_samples)
+
+        target_texts = torch.cat(target_texts)
+        target_labels = torch.Tensor(target_labels).long()
+    
+        # add another axis to match batch shape (b,s,c,w)
+        return target_texts[None,:,:,:],target_labels
 
     def __len__(self):
         total_samples = self.data_length[self.current_set_name]
@@ -1004,7 +1034,7 @@ class NLPDataProvider(Dataset):
         self.current_set_name = set_name
         if set_name == "train":
             self.update_seed(dataset_name=set_name, seed=self.init_seed[set_name] + current_iter)
-
+        
     def update_seed(self, dataset_name, seed=100):
         self.seed[dataset_name] = seed
 
@@ -1044,7 +1074,7 @@ class MetaLearningSystemDataLoader(object):
         :return:
         """
         return DataLoader(self.dataset, batch_size=(self.num_of_gpus * self.batch_size * self.samples_per_iter),
-                          shuffle=False, drop_last=True,num_workers=self.num_workers)
+                          shuffle=False, drop_last=True)#,num_workers=self.num_workers)
 
     def continue_from_iter(self, current_iter):
         """
@@ -1098,6 +1128,18 @@ class MetaLearningSystemDataLoader(object):
             self.dataset.data_length['test'] = total_batches * self.dataset.batch_size
         self.dataset.switch_set(set_name='test')
         self.dataset.set_augmentation(augment_images=augment_images)
+        target_set,target_labels = self.dataset.get_pan_full_target_set()
         for sample_id, sample_batched in enumerate(self.get_dataloader()):
-            yield sample_batched
+            # validation_tensor = torch.tensor([-1]*self.dataset.batch_size)
+            # assert(sample_batched[1] == validation_tensor)
+            # assert(sample_batched[3] == validation_tensor)
+            target_text_generator = TensorGenerator(target_set,max_length=self.dataset.batch_size)
+            target_label_generator = TensorGenerator(target_labels,max_length=self.dataset.batch_size)
+            yield (
+                sample_batched[0],
+                target_text_generator, # same samples for all test iterations as required by usecase
+                sample_batched[2],
+                target_label_generator, # same labels for all test iterations as required by usecase
+                sample_batched[-1]
+                )
 

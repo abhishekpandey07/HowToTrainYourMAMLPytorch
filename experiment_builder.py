@@ -179,7 +179,7 @@ class ExperimentBuilder(object):
         data_batch = (
             x_support_set, x_target_set, y_support_set, y_target_set)
 
-        losses, per_task_preds = self.model.run_validation_iter(data_batch=data_batch)
+        losses, per_task_preds = self.model.run_validation_iter(data_batch=data_batch, test_iteration=True)
 
         per_model_per_batch_preds[model_idx].extend(list(per_task_preds))
 
@@ -272,12 +272,16 @@ class ExperimentBuilder(object):
                         self.data.get_test_batches(total_batches=int(self.args.num_evaluation_tasks / self.args.batch_size),
                                                    augment_images=False)):
                     #print(test_sample[4])
-                    per_model_per_batch_targets[idx].extend(np.array(test_sample[3]))
+                    # since the target sets remain the same. a single variable for each
+                    # i am using a single variable.
+                    # per_model_per_batch_targets[idx].extend(np.array(test_sample[3]))
+                    per_model_per_batch_targets[idx] = next(test_sample[3])
                     per_model_per_batch_preds = self.test_evaluation_iteration(val_sample=test_sample,
                                                                                sample_idx=sample_idx,
                                                                                model_idx=idx,
                                                                                per_model_per_batch_preds=per_model_per_batch_preds,
-                                                                               pbar_test=pbar_test)
+                                                                               pbar_test=pbar_test,
+                                                                               )
         # for i in range(top_n_models):
         #     print("test assertion", 0)
         #     print(per_model_per_batch_targets[0], per_model_per_batch_targets[i])
