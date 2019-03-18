@@ -3,6 +3,7 @@ import os
 import numpy as np
 import sys
 from utils.storage import build_experiment_folder, save_statistics, save_to_json
+from evaluators import PanEvaluator
 import time
 import torch
 
@@ -286,6 +287,14 @@ class ExperimentBuilder(object):
         #     print("test assertion", 0)
         #     print(per_model_per_batch_targets[0], per_model_per_batch_targets[i])
         #     assert np.equal(np.array(per_model_per_batch_targets[0]), np.array(per_model_per_batch_targets[i]))
+        # sending data and dataprovider to evaluator
+        evaluator = PanEvaluator(
+            data_provider=self.data,
+            per_model_per_batch_preds=per_model_per_batch_preds,
+            per_model_per_batch_targets=per_model_per_batch_targets
+        )
+
+        best_model_idx = evaluator.evaluate()
 
         per_batch_preds = np.mean(per_model_per_batch_preds, axis=0)
         #print(per_batch_preds.shape)
@@ -376,4 +385,4 @@ class ExperimentBuilder(object):
                             print("train_seed {}, val_seed: {}, at pause time".format(self.data.dataset.seed["train"],
                                                                                       self.data.dataset.seed["val"]))
                             sys.exit()
-            self.evaluated_test_set_using_the_best_models(top_n_models=5)
+            self.evaluated_test_set_using_the_best_models(top_n_models=1)
