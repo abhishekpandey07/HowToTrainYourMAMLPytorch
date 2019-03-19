@@ -423,14 +423,14 @@ class TwitterDataProvider(Dataset):
                 class_text_samples.append(torch.tensor(x_class_data,dtype=torch.float32))
                 class_labels.append(int(class_to_episode_label[class_entry]))
             
-                choose_target_list = rng.choice(self.dataset_size_dict['target'][class_entry],
+            choose_target_list = rng.choice(self.dataset_size_dict['target'][class_entry],
                                                 size=self.num_target_samples, replace=False)
-                for sample in choose_target_list:
-                    choose_samples = self.datasets["target"][class_entry][sample]
-                    x_class_data = self.load_batch([choose_samples])
-                
-                    class_text_samples.append(torch.tensor(x_class_data,dtype=torch.float32))
-                    class_labels.append(int(class_to_episode_label[class_entry]))
+            for sample in choose_target_list:
+                choose_samples = self.datasets["target"][class_entry][sample]
+                x_class_data = self.load_batch([choose_samples])
+            
+                class_text_samples.append(torch.tensor(x_class_data,dtype=torch.float32))
+                class_labels.append(int(class_to_episode_label[class_entry]))
 
             class_text_samples = torch.stack(class_text_samples)
             x_texts.append(class_text_samples)

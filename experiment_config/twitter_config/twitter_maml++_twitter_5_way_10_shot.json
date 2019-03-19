@@ -8,7 +8,7 @@
     "dataset_name":"medium-twitter",
     "dataset_path":"medium-twitter",
     "reset_stored_paths":false,
-    "experiment_name":"twitter_maml++_twitter_5_way_10_shot_2nd_run",
+    "experiment_name":"twitter_maml++_twitter_5_way_10_shot_run_3",
     "train_seed": 0, "val_seed": 0,
     "train_val_test_split": [0.75, 0.25,0],
     "indexes_of_folders_indicating_class": [-3, -2],
