@@ -127,8 +127,9 @@ class TwitterDataProvider(Dataset):
                 if(file.endswith('.txt')):
                     filepath = os.path.abspath(os.path.join(subdir, file))
                     label = self.get_label_from_path(filepath)
-                    data_file_text_path_list_raw.append(filepath)
-                    labels.add(label)
+                    if(int(subdir[-3:]) < 40):
+                        data_file_text_path_list_raw.append(filepath)
+                        labels.add(label)
                 
         labels = sorted(labels)
         idx_to_label_name = {idx: label for idx, label in enumerate(labels)}

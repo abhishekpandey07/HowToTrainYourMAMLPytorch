@@ -55,7 +55,7 @@ class MetaLearningSystemDataLoader(object):
         :return:
         """
         return DataLoader(self.dataset, batch_size=(self.num_of_gpus * self.batch_size * self.samples_per_iter),
-                          shuffle=False, drop_last=True,num_workers=self.num_workers)
+                          shuffle=False, drop_last=True)#,num_workers=self.num_workers)
 
     def continue_from_iter(self, current_iter):
         """

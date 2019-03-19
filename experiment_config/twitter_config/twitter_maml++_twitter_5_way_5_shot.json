@@ -1,8 +1,8 @@
 {
-    "batch_size":4,
+    "batch_size":12,
     "input_width":500,
     "input_channels":61,
-    "gpu_to_use":0,
+    "gpu_to_use":2,
     "num_dataprovider_workers":4,
     "max_models_to_save":5,
     "dataset_name":"medium-twitter",
@@ -48,8 +48,8 @@
     "number_of_evaluation_steps_per_iter":5,
     "cnn_blocks_per_stage":1,
     "num_classes_per_set":5,
-    "num_samples_per_class":10,
-    "num_target_samples": 10,
+    "num_samples_per_class":5,
+    "num_target_samples": 5,
   
     "second_order": true,
     "use_multi_step_loss_optimization":true
