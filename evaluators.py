@@ -6,7 +6,7 @@ from dataproviders.encoders import one_hot_encoder
 class PanEvaluator(object):
     def __init__(self,data_provider,per_model_per_batch_preds,per_model_per_batch_targets):
         self.data_provider = data_provider        
-        self.predictions = per_model_per_batch_preds
+        self.original_predictions = per_model_per_batch_preds
         self.targets = per_model_per_batch_targets
         self.results = {}
 
@@ -62,6 +62,18 @@ class PanEvaluator(object):
 
 
     def evaluate(self):
+        self.build_file_map()
+        self.targets = self.targets[0]
+        ensemble_accuracy = self.evaluate_ensemble()
+        original_task_accuracy = self.evaluate_original_task() 
+        task_accuracies = self.evaluate_tasks()
+        return {
+            "ensemble_acc": ensemble_accuracy,
+            "task_accuracies": task_accuracies,
+            "original_task_accuracy": original_task_accuracy,
+        }
+
+    def evaluate_ensemble(self):
         # assuming only one model
         # assuming only one evaluation_task
         # assuming only 16 tasks
@@ -69,44 +81,39 @@ class PanEvaluator(object):
         # club all task predictions into one prediction by taking mean of probabilities.
         # this is to enforce an ensembling effect.
         # do it for one model first
-        task_accuracies = []
-        self.predictions:np.ndarray = np.array(self.predictions[0])
+        self.predictions:np.ndarray = np.array(self.original_predictions[0])
         self.predictions  = self.predictions.mean(axis=0)
-        self.targets = self.targets[0]
-        self.build_file_map()
-        #self.verify_file_and_inputs()
-        predictions_file_map = self.rearrange_class_predictions(self.class_to_file_length_map)
+        
+        predictions_file_map = self.rearrange_class_predictions(self.class_to_file_length_map.copy())
         classification_file_map = {
             int(x): [self.get_classification_from_predictions(pred) for pred in v] for x,v in predictions_file_map.items()
         }
-
         correct_classifications = sum([ sum([1 for p in pred if p == target]) for target,pred in classification_file_map.items()])
         accuracy = correct_classifications/self.total_files
-        task_accuracies.append(accuracy)
 
+        return {"desc":"accuracy of the ensemble on the files","accuracy":accuracy}
 
+    def evaluate_tasks(self):
+        task_accuracies = []
+        self.task_predictions = np.array(self.original_predictions[0])
+        for x in self.task_predictions:
+            self.predictions = x
+            predictions_file_map = self.rearrange_class_predictions(self.class_to_file_length_map.copy())
+            classification_file_map = {
+                int(x): [self.get_classification_from_predictions(pred) for pred in v] for x,v in predictions_file_map.items()
+            }
+            correct_classifications = sum([ sum([1 for p in pred if p == target]) for target,pred in classification_file_map.items()])
+            accuracy = correct_classifications/self.total_files
+            task_accuracies.append(accuracy)
         
-        # result = []
-        # for author,file_preds in classification_file_map.items():
-        #     for file_idx,pred_idx in enumerate(file_preds):
-        #         true_author = self.idx_to_label_map[x]
-        #         predicted_author = self.idx_to_label_map[pred_idx]
-        #         filename = self.idx_to_filename_map[file_idx].split('/')[-1]
-        #         result.append({
-        #             "true_author": true_author,
-        #             "predicted_author": predicted_author,
-        #             "filename": filename
-        #         })
-        # self.results["classification"] = result
-        # self.results["classification_file_map"] = classification_file_map
-        # self.results["predictions_to_file_map"] = self.idx_to_filename_map
-        # self.results["author_to_idx_map"] = self.label_to_idx_map
-        # self.results["predictions_file_map"] = predictions_file_map
-        # output_file = "pan18_maml++_pan_5_way_10_shot_problem00002_results.json"
-        # with open(output_file,'w') as f:
-        #     json.dump(self.results,f)
-        print(task_accuracies)
-        return task_accuracies
+        return {"desc": "mean of accuracies of each batch model on a file","mean":np.mean(task_accuracies),"var":np.std(task_accuracies)}
+
+    def evaluate_original_task(self):
+        x = np.array(self.original_predictions[0])
+        x = torch.Tensor(x.argmax(axis=2))
+        preds = np.array(x.long() == self.targets)
+        accuracies = np.mean(preds,axis=1)
+        return {"desc": "mean of accuracies of each batch model on a each datapoint","mean":np.mean(accuracies),"var":np.std(accuracies)}
         
             
 

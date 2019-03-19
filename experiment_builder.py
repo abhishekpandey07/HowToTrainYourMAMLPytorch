@@ -294,26 +294,25 @@ class ExperimentBuilder(object):
             per_model_per_batch_targets=per_model_per_batch_targets
         )
 
-        best_model_idx = evaluator.evaluate()
+        metrics = evaluator.evaluate()
 
-        per_batch_preds = np.mean(per_model_per_batch_preds, axis=0)
-        #print(per_batch_preds.shape)
-        per_batch_max = np.argmax(per_batch_preds, axis=2)
-        per_batch_targets = np.array(per_model_per_batch_targets[0]).reshape(per_batch_max.shape)
-        #print(per_batch_max)
-        accuracy = np.mean(np.equal(per_batch_targets, per_batch_max))
-        accuracy_std = np.std(np.equal(per_batch_targets, per_batch_max))
-
-        test_losses = {"test_accuracy_mean": accuracy, "test_accuracy_std": accuracy_std}
+        # per_batch_preds = np.mean(per_model_per_batch_preds, axis=0)
+        # #print(per_batch_preds.shape)
+        # per_batch_max = np.argmax(per_batch_preds, axis=2)
+        # per_batch_targets = np.array(per_model_per_batch_targets[0]).reshape(per_batch_max.shape)
+        # #print(per_batch_max)
+        # accuracy = np.mean(np.equal(per_batch_targets, per_batch_max))
+        # accuracy_std = np.std(np.equal(per_batch_targets, per_batch_max))
+        
 
         _ = save_statistics(self.logs_filepath,
-                            list(test_losses.keys()),
+                            list(metrics.keys()),
                             create=True, filename="test_summary.csv")
 
         summary_statistics_filepath = save_statistics(self.logs_filepath,
-                                                      list(test_losses.values()),
+                                                      list(metrics.values()),
                                                       create=False, filename="test_summary.csv")
-        print(test_losses)
+        print(metrics)
         print("saved test performance at", summary_statistics_filepath)
 
     def run_experiment(self):

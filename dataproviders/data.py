@@ -55,7 +55,7 @@ class MetaLearningSystemDataLoader(object):
         :return:
         """
         return DataLoader(self.dataset, batch_size=(self.num_of_gpus * self.batch_size * self.samples_per_iter),
-                          shuffle=False, drop_last=True)#,num_workers=self.num_workers)
+                          shuffle=False, drop_last=True,num_workers=self.num_workers)
 
     def continue_from_iter(self, current_iter):
         """
@@ -110,7 +110,7 @@ class MetaLearningSystemDataLoader(object):
         self.dataset.switch_set(set_name='test')
         self.dataset.set_augmentation(augment_images=augment_images)
 
-        if(type(self.dataset)==NLPDataProvider): 
+        if(type(self.dataset)==PANDataProvider): 
             target_set,target_labels = self.dataset.get_pan_full_target_set()
             for sample_id, sample_batched in enumerate(self.get_dataloader()):
                 # validation_tensor = torch.tensor([-1]*self.dataset.batch_size)

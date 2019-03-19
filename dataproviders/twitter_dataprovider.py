@@ -137,20 +137,20 @@ class TwitterDataProvider(Dataset):
         data_text_path_dict = {idx: [] for idx in list(idx_to_label_name.keys())}
         target_set_map_dict = {idx: [] for idx in list(idx_to_label_name.keys())}        
         with tqdm.tqdm(total=len(data_file_text_path_list_raw)) as pbar_error:
-            # with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
                 # Process the list of files, but split the work across the process pool to use all CPUs!
-            for text_file in (map(self.test_file_path,data_file_text_path_list_raw)):
-                pbar_error.update(1)
-                if text_file is not None:
-                    filename = text_file.split('/')[-1]
-                    label = self.get_label_from_path(text_file)
-                    idx = label_name_to_idx[label]
-                    if('medium' in filename):
-                        data_text_path_dict[idx].append(text_file)
+                for text_file in executor.map(self.test_file_path,data_file_text_path_list_raw):
+                    pbar_error.update(1)
+                    if text_file is not None:
+                        filename = text_file.split('/')[-1]
+                        label = self.get_label_from_path(text_file)
+                        idx = label_name_to_idx[label]
+                        if('medium' in filename):
+                            data_text_path_dict[idx].append(text_file)
 
-                    # use elif to make both dicts disjoint
-                    elif('twitter' in filename):
-                        target_set_map_dict[idx].append(text_file)
+                        # use elif to make both dicts disjoint
+                        elif('twitter' in filename):
+                            target_set_map_dict[idx].append(text_file)
 
         return data_text_path_dict, idx_to_label_name, label_name_to_idx, target_set_map_dict
 
@@ -356,11 +356,11 @@ class TwitterDataProvider(Dataset):
                 x_loaded[set_key] = {key: np.zeros(len(value), ) for key, value in set_value.items()}
                 # for class_key, class_value in set_value.items():
                 with tqdm.tqdm(total=len(set_value)) as pbar_memory_load:
-                    # with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+                    with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
                         # Process the list of files, but split the work across the process pool to use all CPUs!
-                    for (class_label, class_images_loaded) in (map(self.load_parallel_batch, (set_value.items()))):
-                        x_loaded[set_key][class_label] = class_images_loaded
-                        pbar_memory_load.update(1)
+                        for (class_label, class_images_loaded) in executor.map(self.load_parallel_batch, (set_value.items())):
+                            x_loaded[set_key][class_label] = class_images_loaded
+                            pbar_memory_load.update(1)
 
             dataset_splits = x_loaded
             self.data_loaded_in_memory = True
