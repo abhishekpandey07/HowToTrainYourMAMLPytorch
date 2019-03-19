@@ -13,9 +13,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 from collections import defaultdict
 from utils.parser_utils import get_args
 from utils.tensor_generator import TensorGenerator
-import string
-
-from data import one_hot_encoder
+from dataproviders.encoders import one_hot_encoder
 
 class TwitterDataProvider(Dataset):
     def __init__(self, args):
@@ -126,10 +124,11 @@ class TwitterDataProvider(Dataset):
         
         for subdir, dir, files in os.walk(self.data_path):
             for file in files:
-                filepath = os.path.abspath(os.path.join(subdir, file))
-                label = self.get_label_from_path(filepath)
-                data_file_text_path_list_raw.append(filepath)
-                labels.add(label)
+                if(file.endswith('.txt')):
+                    filepath = os.path.abspath(os.path.join(subdir, file))
+                    label = self.get_label_from_path(filepath)
+                    data_file_text_path_list_raw.append(filepath)
+                    labels.add(label)
                 
         labels = sorted(labels)
         idx_to_label_name = {idx: label for idx, label in enumerate(labels)}
@@ -416,17 +415,16 @@ class TwitterDataProvider(Dataset):
                 choose_samples = self.datasets[dataset_name][class_entry][sample]
                 x_class_data = self.load_batch([choose_samples])[0]
                
-                class_text_samples.append(torch.tensor(x_class_data))
+                class_text_samples.append(torch.Tensor(x_class_data))
                 class_labels.append(int(class_to_episode_label[class_entry]))
             
-            if(dataset_name is not 'test'):
                 choose_target_list = rng.choice(self.dataset_size_dict['target'][class_entry],
                                                 size=self.num_target_samples, replace=False)
                 for sample in choose_target_list:
                     choose_samples = self.datasets["target"][class_entry][sample]
                     x_class_data = self.load_batch([choose_samples])[0]
                 
-                    class_text_samples.append(torch.tensor(x_class_data))
+                    class_text_samples.append(torch.Tensor(x_class_data))
                     class_labels.append(int(class_to_episode_label[class_entry]))
 
             class_text_samples = torch.stack(class_text_samples)
@@ -438,35 +436,10 @@ class TwitterDataProvider(Dataset):
 
         support_set_images = x_texts[:, :self.num_samples_per_class]
         support_set_labels = y_labels[:, :self.num_samples_per_class]
-        if(dataset_name is not 'test'):
-            target_set_images = x_texts[:, self.num_samples_per_class:]
-            target_set_labels = y_labels[:, self.num_samples_per_class:]
-        else:
-            # this branch is to evaluate pan dataset on a 5 class problem 
-            # which is also equal to the number of possible classes.
-            target_set_labels = -1
-            target_set_images = -1
-            # but this will still create 16 copies of the same dataset.
-            # rather create a custom function.
+        target_set_images = x_texts[:, self.num_samples_per_class:]
+        target_set_labels = y_labels[:, self.num_samples_per_class:]
+        
         return support_set_images, target_set_images, support_set_labels, target_set_labels, seed
-
-    def get_pan_full_target_set(self):
-        target_labels = []
-        target_texts = []
-        for a_class in self.datasets['target']:
-            class_samples = []
-            for sample in self.datasets['target'][a_class]:
-                target_labels.append(int(a_class))
-                class_data = self.load_batch([sample])[0]
-                class_samples.append(torch.tensor(class_data))
-            class_samples = torch.stack(class_samples)
-            target_texts.append(class_samples)
-
-        target_texts = torch.cat(target_texts)
-        target_labels = torch.Tensor(target_labels).long()
-    
-        # add another axis to match batch shape (b,s,c,w)
-        return target_texts[None,:,:,:],target_labels
 
     def __len__(self):
         total_samples = self.data_length[self.current_set_name]

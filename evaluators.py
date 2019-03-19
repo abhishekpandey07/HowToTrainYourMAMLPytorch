@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import json
-from data import one_hot_encoder
+from dataproviders.encoders import one_hot_encoder
 
 class PanEvaluator(object):
     def __init__(self,data_provider,per_model_per_batch_preds,per_model_per_batch_targets):
