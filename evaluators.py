@@ -70,20 +70,19 @@ class PanEvaluator(object):
         # this is to enforce an ensembling effect.
         # do it for one model first
         task_accuracies = []
-        self.task_predictions:np.ndarray = np.array(self.predictions[0])
+        self.predictions:np.ndarray = np.array(self.predictions[0])
+        self.predictions  = self.predictions.mean(axis=0)
         self.targets = self.targets[0]
         self.build_file_map()
-        self.verify_file_and_inputs()
-        for x in self.task_predictions:
-            self.predictions = x
-            predictions_file_map = self.rearrange_class_predictions(class_to_file_length_map)
-            classification_file_map = {
-                int(x): [self.get_classification_from_predictions(pred) for pred in v] for x,v in predictions_file_map.items()
-            }
+        #self.verify_file_and_inputs()
+        predictions_file_map = self.rearrange_class_predictions(self.class_to_file_length_map)
+        classification_file_map = {
+            int(x): [self.get_classification_from_predictions(pred) for pred in v] for x,v in predictions_file_map.items()
+        }
 
-            correct_classifications = sum([ sum([1 for p in pred if p == target]) for target,pred in classification_file_map.items()])
-            accuracy = correct_classifications/self.total_files
-            task_accuracies.append(accuracy)
+        correct_classifications = sum([ sum([1 for p in pred if p == target]) for target,pred in classification_file_map.items()])
+        accuracy = correct_classifications/self.total_files
+        task_accuracies.append(accuracy)
 
 
         
