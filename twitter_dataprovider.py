@@ -17,7 +17,7 @@ import string
 
 from data import one_hot_encoder
 
-class NLPDataProvider(Dataset):
+class TwitterDataProvider(Dataset):
     def __init__(self, args):
         """
         A data provider class inheriting from Pytorch's Dataset class. It takes care of creating task sets for
@@ -125,40 +125,33 @@ class NLPDataProvider(Dataset):
         labels = set()
         
         for subdir, dir, files in os.walk(self.data_path):
-            if('unknown' not in subdir):
-                for file in files:
-                    if file.lower().endswith('processed'):
-                        filepath = os.path.abspath(os.path.join(subdir, file))
-                        label = self.get_label_from_path(filepath)
-                        data_file_text_path_list_raw.append(filepath)
-                        labels.add(label)
-            else:
-                unknown_dir_name = subdir
-
+            for file in files:
+                filepath = os.path.abspath(os.path.join(subdir, file))
+                label = self.get_label_from_path(filepath)
+                data_file_text_path_list_raw.append(filepath)
+                labels.add(label)
+                
         labels = sorted(labels)
         idx_to_label_name = {idx: label for idx, label in enumerate(labels)}
         label_name_to_idx = {label: idx for idx, label in enumerate(labels)}
+        
         data_text_path_dict = {idx: [] for idx in list(idx_to_label_name.keys())}
+        target_set_map_dict = {idx: [] for idx in list(idx_to_label_name.keys())}        
         with tqdm.tqdm(total=len(data_file_text_path_list_raw)) as pbar_error:
             # with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
                 # Process the list of files, but split the work across the process pool to use all CPUs!
             for text_file in (map(self.test_file_path,data_file_text_path_list_raw)):
                 pbar_error.update(1)
                 if text_file is not None:
+                    filename = text_file.split('/')[-1]
                     label = self.get_label_from_path(text_file)
-                    data_text_path_dict[label_name_to_idx[label]].append(text_file)
+                    idx = label_name_to_idx[label]
+                    if('medium' in filename):
+                        data_text_path_dict[idx].append(text_file)
 
-        # load target sets
-        target_set_map_dict = None
-        if(unknown_dir_name):
-            ground_truth_data = self.load_from_json(os.path.join(self.data_path,'ground-truth.json'))['ground_truth']
-            target_set_map_dict = defaultdict(list)
-            for x in ground_truth_data:
-                idx = label_name_to_idx[x['true-author']]
-                filename = ".".join([x['unknown-text'],"processed"])
-                filename = os.path.join(unknown_dir_name,filename)
-                filename = os.path.abspath(filename)
-                target_set_map_dict[idx].append(filename)
+                    # use elif to make both dicts disjoint
+                    elif('twitter' in filename):
+                        target_set_map_dict[idx].append(text_file)
 
         return data_text_path_dict, idx_to_label_name, label_name_to_idx, target_set_map_dict
 
