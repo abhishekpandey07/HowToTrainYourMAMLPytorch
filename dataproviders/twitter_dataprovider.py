@@ -233,22 +233,24 @@ class TwitterDataProvider(Dataset):
 
         # Perform One Hot encoding
         """
-        try: 
-            #encoder = encoders[mehthod]
-            for i,text_file in enumerate(x): 
-                x[i] = one_hot_encoder.transform(text_file).toarray()
-                #x[i] = x[i].reshape(-1,self.input_width,self.input_channels)
-                # swap features with channels to get a final shape of (#batch,#channels,#features)
-                #x[i] = np.swapaxes(x[i],1,2) 
+        # try: 
+        #     #encoder = encoders[mehthod]
+        #     # for i,text_file in enumerate(x): 
+        #     x[i] = one_hot_encoder.transform(text_file).toarray()
+        #         #x[i] = x[i].reshape(-1,self.input_width,self.input_channels)
+        #         # swap features with channels to get a final shape of (#batch,#channels,#features)
+        #         #x[i] = np.swapaxes(x[i],1,2) 
             
-            x = np.vstack(x)
-            x = x.reshape(-1,self.input_width, self.input_channels)
-            x = np.swapaxes(x,1,2)
-            return x
+        #     x = np.vstack(x)
+        #     x = x.reshape(-1,self.input_width, self.input_channels)
+        #     x = np.swapaxes(x,1,2)
+        #     return x
 
-        except Exception as e:
-            print(e.args)
-            return x
+        # except Exception as e:
+        #     print(e.args)
+        #     return x
+
+        return one_hot_encoder.transform(x.reshape(-1,1)).T.toarray()
 
     def load_text(self, file_path):
         """
@@ -259,7 +261,7 @@ class TwitterDataProvider(Dataset):
         if not self.data_loaded_in_memory:
             text_file = open(file_path,'r')
             text = [list(x.replace('\n','')) for x in text_file.readlines() if(len(x) >= 500)]
-            text = np.array(text).reshape(-1,1)
+            text = np.array(text).reshape(-1,500)
             # should I convert this into a one hot encoded vector here itself ? NO!
         else:
             text = file_path
@@ -277,13 +279,14 @@ class TwitterDataProvider(Dataset):
         if self.data_loaded_in_memory:
             for text_path in batch_text_path:
                 text_batch.append(text_path)
-            text_batch = np.array(text_batch, dtype=np.float32)
+            text_batch = np.array(text_batch)
+            text_batch = self.preprocess_data(text_batch)
             #print(text_batch.shape)
         else:
             text_batch = [self.load_text(file_path=text_path)
                            for text_path in batch_text_path]
             text_batch = np.array(text_batch, dtype=np.float32)
-            text_batch = self.preprocess_data(text_batch)
+            # text_batch = self.preprocess_data(text_batch)
 
         return text_batch
 
@@ -301,7 +304,7 @@ class TwitterDataProvider(Dataset):
         if self.data_loaded_in_memory:
             for file_path in batch_file_paths:
                 text_batch.append(np.copy(file_path))
-            text_batch = np.array(text_batch, dtype=np.float32)
+            text_batch = self.preprocess_data(text_batch)
 
         else:
             #with tqdm.tqdm(total=1) as load_pbar:
@@ -309,8 +312,9 @@ class TwitterDataProvider(Dataset):
                            for file_path in batch_file_paths]
                 #load_pbar.update(1)
 
-            # text_batch = np.array(text_batch, dtype=np.float32)
-            text_batch = self.preprocess_data(text_batch)
+            text_batch = np.vstack(text_batch)
+
+            # text_batch = self.preprocess_data(text_batch)
 
         return class_label, text_batch
 
@@ -414,18 +418,18 @@ class TwitterDataProvider(Dataset):
             class_labels = []
             for sample in choose_support_list:
                 choose_samples = self.datasets[dataset_name][class_entry][sample]
-                x_class_data = self.load_batch([choose_samples])[0]
+                x_class_data = self.load_batch([choose_samples])
                
-                class_text_samples.append(torch.Tensor(x_class_data))
+                class_text_samples.append(torch.tensor(x_class_data,dtype=torch.float32))
                 class_labels.append(int(class_to_episode_label[class_entry]))
             
                 choose_target_list = rng.choice(self.dataset_size_dict['target'][class_entry],
                                                 size=self.num_target_samples, replace=False)
                 for sample in choose_target_list:
                     choose_samples = self.datasets["target"][class_entry][sample]
-                    x_class_data = self.load_batch([choose_samples])[0]
+                    x_class_data = self.load_batch([choose_samples])
                 
-                    class_text_samples.append(torch.Tensor(x_class_data))
+                    class_text_samples.append(torch.tensor(x_class_data,dtype=torch.float32))
                     class_labels.append(int(class_to_episode_label[class_entry]))
 
             class_text_samples = torch.stack(class_text_samples)
